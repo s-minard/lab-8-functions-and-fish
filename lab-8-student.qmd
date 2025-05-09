@@ -14,6 +14,7 @@ modular code.
 library(tidyverse)
 library(ggplot2)
 library(purrr)
+library(rlang)
 
 #load data
 fish <- read_csv("data/BlackfootFish.csv")
@@ -48,8 +49,6 @@ measurement errors.
 
 ```{r}
 #| label: find-missing-values
-#check with vis_miss first
-visdat::vis_miss(fish)
 
 #find the number of rows that have NA (1796)
 fish |> 
@@ -87,7 +86,6 @@ NA_count_table
 fish |> 
   mutate(row_has_na = if_any(everything(), is.na)) |> 
   filter(row_has_na == "TRUE") |> 
- # group_by(year, section, trip) |> 
   ggplot() +
   geom_bar(aes(x = factor(year),
                fill = section),
@@ -144,7 +142,7 @@ function, instead!
 ```{r}
 #| label: write-rescale-function
 
-# create rescaling function
+#create rescaling function
 rescale_01 <- function(x) {
   mutate(x = (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - (min(x, na.rm = TRUE))))
 }
@@ -161,7 +159,7 @@ rescale_01 <- function(x) {
   return(x = (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - (min(x, na.rm = TRUE)))) 
 }
 
-# test it
+#test it
 #rescale_01(fish$weight)
 ```
 
@@ -220,7 +218,7 @@ fish |>
   scale_y_continuous(limits = c(0,4000))
 
 # Code for Q7 plot.
-# scaled plot
+#scaled plot
 fish |> 
   mutate(length_scaled = rescale_01(length)) |> 
   ggplot(aes(x = length_scaled)) + 
@@ -259,6 +257,12 @@ section of R for Data Science!
 ```{r}
 #| label: rescale-data-frame-function
 
+#create function that takes data frame and returns a new data frame with rescaled variables as specified
+rescale_column <- function(data, ...) {
+  data |> 
+  mutate(across(c(...), ~ rescale_01(.x)))
+}
+
 ```
 
 **9. Use your `rescale_column()` function to rescale *both* the `length` and `weight` columns.**
@@ -270,4 +274,11 @@ I expect that you carry out this process by calling the `rescale_column()` funct
 ```{r}
 #| label: rescale-two-columns
 
+#rescale length and weight
+fish |> 
+  rescale_column(length, weight)
+
+#test if it works on just one column at a time (it does)
+fish |> 
+  rescale_column(weight)
 ```
