@@ -13,7 +13,10 @@ modular code.
 #| echo: false
 library(tidyverse)
 library(ggplot2)
+library(purrr)
 
+#load data
+fish <- read_csv("data/BlackfootFish.csv")
 ```
 
 ## The Data
@@ -45,7 +48,20 @@ measurement errors.
 
 ```{r}
 #| label: find-missing-values
+#check with vis_miss first
+visdat::vis_miss(fish)
 
+#find the number of rows that have NA (1796)
+fish |> 
+  mutate(row_has_na = if_any(everything(), is.na)) |> 
+  summarise(rows_w_na = sum(row_has_na))
+
+#determine which columns those are in (all in weight)
+fish |> 
+  summarise(across(everything(), ~ sum(is.na(.)))) |> 
+  pivot_longer(everything(), names_to = "variable", values_to = "na_total") |> 
+  filter(na_total > 0)
+  
 ```
 
 
@@ -54,8 +70,11 @@ measurement errors.
 
 ```{r}
 #| label: map-missing-values-of-fish
+# using map_int to make a table
+NA_count_table <- fish |> 
+  map_int(~ sum(is.na(.)))
 
-
+NA_count_table
 ```
 
 
@@ -63,6 +82,22 @@ measurement errors.
 
 ```{r}
 #| label: visual-of-missing-values-over-time
+
+# plot for counts each year
+fish |> 
+  mutate(row_has_na = if_any(everything(), is.na)) |> 
+  filter(row_has_na == "TRUE") |> 
+ # group_by(year, section, trip) |> 
+  ggplot() +
+  geom_bar(aes(x = factor(year),
+               fill = section),
+           position = "dodge") +
+  facet_wrap(~trip) +
+  labs(x = "Year",
+       y = "Number of Missing Values",
+       fill = "Section",
+       title = "Number of Missing Values Per Year By Section and Trip") +
+  theme_bw()
 
 ```
 
@@ -78,7 +113,7 @@ $$y_{scaled} = \frac{y_i - min\{y_1, y_2,..., y_n\}}{max\{y_1, y_2,..., y_n\}
 
 </br>
 
-I might write the following `R` code to carry out the rescaling procedure for the `length` and `weight` columns of the `BlackfoorFish` data:
+I might write the following `R` code to carry out the rescaling procedure for the `length` and `weight` columns of the `BlackfootFish` data:
 
 ```{r}
 #| echo: true
@@ -96,6 +131,7 @@ understand the intent of the process. *Additionally, it can make it very difficu
 
 **3. What is the mistake I made in the above rescaling code?**
 
+> (max(weight, na.rm = TRUE) - min(length, na.rm = TRUE))). Forgot to change length to width in the min() function. 
 
 When you find yourself copy-pasting lines of code, it's time to write a
 function, instead!
@@ -108,6 +144,25 @@ function, instead!
 ```{r}
 #| label: write-rescale-function
 
+# create rescaling function
+rescale_01 <- function(x) {
+  mutate(x = (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - (min(x, na.rm = TRUE))))
+}
+
+#modification
+#must change mutate to return since mutate works with a data frame not a vector
+rescale_01 <- function(x) {
+  if(!is.numeric(x)) {
+    stop("Error: x must be numeric") #if it's not numeric, stop
+  }
+  if(length(x) <= 1) {
+    stop("Error: length not greater than 1")
+  }
+  return(x = (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - (min(x, na.rm = TRUE)))) 
+}
+
+# test it
+#rescale_01(fish$weight)
 ```
 
 ::: callout-tip
@@ -155,7 +210,9 @@ statement in order to create a `length_scaled` variable.
 
 ```{r}
 #| label: compare-original-with-rescaled-lengths
+#| layout-ncol: 2
 
+#original plot (unscaled)
 fish |>  
   ggplot(aes(x = length)) + 
   geom_histogram(binwidth = 45) +
@@ -163,7 +220,13 @@ fish |>
   scale_y_continuous(limits = c(0,4000))
 
 # Code for Q7 plot.
-
+# scaled plot
+fish |> 
+  mutate(length_scaled = rescale_01(length)) |> 
+  ggplot(aes(x = length_scaled)) + 
+  geom_histogram(binwidth = 0.045) +
+  labs(x = "Scaled Values of Fish Length (mm)") +
+  scale_y_continuous(limits = c(0,4000))
 ```
 
 ::: callout-tip
